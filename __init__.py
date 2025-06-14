@@ -4,7 +4,9 @@ Binary Ninja plugin entrypoint for *Obfuscation Analysis*.
 Registers UI commands, user-visible settings, and wires them to the
 background-thread helpers.
 """
+import json
 from pathlib import Path
+
 from binaryninja import PluginCommand
 from binaryninja.settings import Settings
 
@@ -49,18 +51,24 @@ PluginCommand.register(
 # ----------------------------------------------------------------------
 
 plugin_dir = Path(__file__).resolve().parent
-mba_oracle_path = f"{plugin_dir}/msynth_oracle.pickle"
+# Always use forward slashes so the JSON that follows is valid on Windows too.
+mba_oracle_path = (plugin_dir / "msynth_oracle.pickle").as_posix()
 
 Settings().register_group("obfuscation_analysis", "Obfuscation Analysis")
+setting_spec = {
+    "description": (
+        "Absolute path to the oracle database shipped with msynth. "
+        "Required for MBA simplification."
+    ),
+    "title": "msynth Oracle DB Path",
+    "default": mba_oracle_path,
+    "type": "string",
+    "requiresRestart": True,
+    "optional": False,
+    "uiSelectionAction": "file",
+}
+
 Settings().register_setting(
     "obfuscation_analysis.mba_oracle_path",
-    f'''{{
-        "description" : "Absolute path to the oracle database shipped with msynth. Required for MBA simplification.", 
-        "title" : "msynth Oracle DB Path", 
-        "default" : "{mba_oracle_path}", 
-        "type" : "string",
-        "requiresRestart": true,
-        "optional": false,
-        "uiSelectionAction": "file"
-    }}'''
+    json.dumps(setting_spec),
 )
