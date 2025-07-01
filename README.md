@@ -12,7 +12,7 @@ It bundles a handful of focused helpers that let you
 * simplify Mixed-Boolean Arithmetic (MBA) expressions in one click (based on [msynth](https://github.com/mrphrazer/msynth))
 * locate and scrub functions with broken disassembly
 
-Some example use cases can be found in [examples](./examples). The plugin complements [Obfuscation Detection](https://github.com/mrphrazer/obfuscation_detection/): once suspicious functions are flagged, _Obfuscation Analysis_ helps you clean and understand them. More helpers will be added over time.
+Some example use cases can be found in [examples](./examples). Furthermore, the REcon talk "Breaking Mixed Boolean-Arithmetic Obfuscation in Real-World Applications" demonstrates some use cases. The slides can be found [here](./presentation/recon25_mba_obfuscation.pdf). The plugin complements [Obfuscation Detection](https://github.com/mrphrazer/obfuscation_detection/): once suspicious functions are flagged, _Obfuscation Analysis_ helps you clean and understand them. More helpers will be added over time.
 
 
 ## Core Features
