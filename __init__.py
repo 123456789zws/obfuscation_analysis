@@ -11,6 +11,7 @@ from binaryninja import PluginCommand
 from binaryninja.settings import Settings
 
 from .obfuscation_analysis import (identify_corrupted_functions_bg,
+                                   inline_functions_recursively_bg,
                                    remove_corrupted_functions_bg,
                                    simplify_hlil_instruction_bg)
 
@@ -44,6 +45,14 @@ PluginCommand.register(
         "and trigger re-analysis to clean up the function list."
     ),
     remove_corrupted_functions_bg,
+)
+
+PluginCommand.register_for_function(
+    "Obfuscation Analysis\\Function Inlining\\Inline Functions Recursively",
+    (
+        "Inline all functions called by the current function recursively in the decompiler to enable a cross-function analysis."
+    ),
+    inline_functions_recursively_bg,
 )
 
 # ----------------------------------------------------------------------
