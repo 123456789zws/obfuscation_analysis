@@ -153,7 +153,7 @@ def inline_functions_recursively(bv: BinaryView, start_func: Function) -> None:
     5. Topologically sort the DAG (caller before callee) and iterate it in
        reverse order to obtain a bottom‑up sequence (callee before caller).
     6. For each SCC in that order, set `inline_during_analysis = True` on all
-       member functions.
+       member functions that are not flagged as `thunk`.
     7. Resume analysis and invoke `BinaryView.update_analysis_and_wait()` so
        that the core processes the queued work once.
 
@@ -185,9 +185,10 @@ def inline_functions_recursively(bv: BinaryView, start_func: Function) -> None:
         for component in reversed(topo_order):
             # Retrieve original Binary Ninja functions that belong to this SCC.
             for func in condensed_dag.nodes[component]['members']:
-                # Flag the function so Binary Ninja will inline its body at every
+                # Flag the non-thunk function so Binary Ninja will inline its body at every
                 # call‑site during the next analysis pass.
-                func.inline_during_analysis = True
+                if not func.is_thunk:
+                    func.inline_during_analysis = True
     finally:
         # Re‑enable analysis regardless of what happened above.
         bv.set_analysis_hold(False)
