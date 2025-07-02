@@ -3,10 +3,63 @@ from __future__ import annotations
 import traceback
 from typing import Iterable, Optional
 
+import networkx as nx
 from binaryninja.binaryview import BinaryView
 from binaryninja.function import Function
 from binaryninja.log import log_debug, log_error
 from binaryninja.lowlevelil import LowLevelILOperation
+from networkx import DiGraph
+
+
+def build_call_graph_from_function(root_func: Function) -> DiGraph:
+    """
+    Construct a *complete* directed call‑graph that contains **every** function
+    that can be reached—directly or indirectly—from the given `root_func`.
+
+    Fundamental ideas
+    ------------------
+      * Depth‑first search (implemented with an explicit stack) is used to avoid
+        Python’s recursion‑depth limits on large binaries.
+      * Each function is visited once; therefore the procedure is Θ(V+E) where
+        V := number of functions and E := number of call‑edges.
+      * We always `add_node` *before* exploring callees so that leaf functions
+        (those without outgoing edges) are still present in the graph.
+
+    Returns
+    --------
+      A `networkx.DiGraph` whose
+          nodes  = Binary Ninja `Function` objects
+          edges  = calls  (caller -> callee)
+    """
+    call_graph = nx.DiGraph()
+
+    # Work stack for explicit DFS; begins with the entry function.
+    work_stack = [root_func]
+
+    # Guard set that tracks which functions have already been processed.
+    seen = set()
+
+    while work_stack:
+        func = work_stack.pop()
+
+        # Skip functions we have already expanded to avoid infinite loops.
+        if func in seen:
+            continue
+        seen.add(func)
+
+        # Ensure the current function exists as a vertex, even if it calls no
+        # one else (important for leaves).
+        call_graph.add_node(func)
+
+        # Traverse and enqueue each direct callee.
+        for callee in func.callees:
+            call_graph.add_edge(func, callee)
+
+            # Schedule the callee for later exploration if not seen before.
+            if callee not in seen:
+                work_stack.append(callee)
+
+    return call_graph
 
 
 def find_corrupted_functions(bv: BinaryView) -> Iterable[Function]:

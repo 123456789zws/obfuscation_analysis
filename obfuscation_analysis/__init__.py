@@ -5,12 +5,12 @@ from typing import Callable, Generic, TypeVar
 from binaryninja.binaryview import BinaryView
 from binaryninja.highlevelil import HighLevelILInstruction
 from binaryninja.plugin import BackgroundTaskThread
+from binaryninja.function import Function
 
-from .features import (
-    simplify_hlil_mba_slice_at,
-    identify_corrupted_functions,
-    remove_corrupted_functions,
-)
+
+from .features import (identify_corrupted_functions,
+                       inline_functions_recursively,
+                       remove_corrupted_functions, simplify_hlil_mba_slice_at)
 
 # ---------------------------------------------------------------------------
 # Internal background-task wrappers
@@ -145,4 +145,24 @@ def remove_corrupted_functions_bg(bv: BinaryView) -> None:
         bv=bv,
         msg="Removing corrupted functions",
         fn=remove_corrupted_functions,
+    ).start()
+
+
+def inline_functions_recursively_bg(bv: BinaryView, function: Function) -> None:
+    """
+    Inlines functions recursivly in the decompiler, enabling a cross-function
+    analysis in a background thread.
+
+    Parameters
+    ----------
+    bv :
+        Active BinaryView to be cleaned up.
+    function:
+        Current Function
+    """
+    BGTask1Param(
+        bv=bv,
+        param=function,
+        msg="Inlining functions recursively",
+        fn=inline_functions_recursively,
     ).start()

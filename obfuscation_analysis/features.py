@@ -1,12 +1,14 @@
 from typing import Iterable
 
+import networkx as nx
 from binaryninja.binaryview import BinaryView
 from binaryninja.function import Function
 from binaryninja.highlevelil import HighLevelILInstruction
 
 from .mba.simplifer import get_simplifier
 from .mba.slicing import backward_slice_basic_block_level
-from .utils import find_corrupted_functions, user_error
+from .utils import (build_call_graph_from_function, find_corrupted_functions,
+                    user_error)
 
 
 def simplify_hlil_mba_slice_at(
@@ -121,3 +123,75 @@ def remove_corrupted_functions(bv: BinaryView) -> None:
 
     # Enforce re-analysis
     bv.update_analysis()
+
+
+def inline_functions_recursively(bv: BinaryView, start_func: Function) -> None:
+    """
+    Recursively inline every function that is reachable from `start_func`
+    so the decompiler can run a true cross‑function analysis on a single,
+    fully inlined intermediate language.  The routine sets
+    `Function.inline_during_analysis = True` for all descendants in an
+    order that forces Binary Ninja to do *exactly one* global analysis
+    pass.
+
+    Efficiency highlights
+    ---------------------
+    - All descendants are discovered, including self‑ and mutually
+      recursive functions.
+    - Strongly‑connected components (SCCs) are collapsed, so every
+      recursion group is handled as a single unit.
+    - Analysis is paused while the flags are flipped, eliminating the
+      overhead of spawning one job per function.
+
+    Algorithm
+    ---------
+    1. Pause auto‑analysis
+    2. Build the complete call graph rooted at `start_func`.
+    3. Find strongly‑connected components (SCCs) so that every recursion
+       group is handled as a single unit.
+    4. Collapse SCCs to get the condensation DAG (always acyclic).
+    5. Topologically sort the DAG (caller before callee) and iterate it in
+       reverse order to obtain a bottom‑up sequence (callee before caller).
+    6. For each SCC in that order, set `inline_during_analysis = True` on all
+       member functions that are not flagged as `thunk`.
+    7. Resume analysis and invoke `BinaryView.update_analysis_and_wait()` so
+       that the core processes the queued work once.
+
+    Complexity
+    ----------
+    - SCC computation           : O(V + E)
+    - Condensation + topo sort  : O(V + E)
+    - Flagging loop             : O(V)
+      ------------------------------------
+      Total                     : O(V + E)
+    """
+    # Pause automatic analysis so we can batch our changes.
+    bv.set_analysis_hold(True)
+
+    try:
+        # Build the exhaustive call‑graph rooted at `start_func`.
+        call_graph = build_call_graph_from_function(start_func)
+
+        # Identify strongly‑connected components (recursion groups).
+        sccs = list(nx.strongly_connected_components(call_graph))
+
+        # Collapse each SCC into one node, producing an acyclic condensation DAG.
+        condensed_dag = nx.condensation(call_graph, sccs)
+
+        # Obtain a topological ordering (caller before callee).
+        topo_order = list(nx.topological_sort(condensed_dag))
+
+        # Process components in *reverse* topological order: bottom‑up.
+        for component in reversed(topo_order):
+            # Retrieve original Binary Ninja functions that belong to this SCC.
+            for func in condensed_dag.nodes[component]['members']:
+                # Flag the non-thunk function so Binary Ninja will inline its body at every
+                # call‑site during the next analysis pass.
+                if not func.is_thunk:
+                    func.inline_during_analysis = True
+    finally:
+        # Re‑enable analysis regardless of what happened above.
+        bv.set_analysis_hold(False)
+
+    # Trigger exactly one analysis pass over all functions we just marked.
+    bv.update_analysis_and_wait()
