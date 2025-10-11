@@ -108,7 +108,7 @@ For the currently selected function, this helper recursively inlines every calle
 * improve algorithm representations that have been split across multiple functions
 * analyze obfuscation schemes where logic is deliberately scattered between functions
 
-Note that IL can become huge and slow to render on very large functions or deeply nested call trees. Furthermore, Binary Ninja’s decompiler optimizations may lose precision once everything is merged into one unit.
+Note that HLIL can become very huge and slow to render on very large functions or deep call trees. In addition, some decompiler optimizations may be less effective once everything is merged into a single unit. To control this, you can limit the inlining depth: set `Settings -> Obfuscation Analysis -> Max Function Inlining Depth` to an upper bound N (per default set to 1). With a depth limit, only the first N call levels are inlined; deeper calls are not inlined.
 
 
 ## Limitations

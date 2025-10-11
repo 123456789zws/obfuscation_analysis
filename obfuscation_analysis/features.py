@@ -125,10 +125,10 @@ def remove_corrupted_functions(bv: BinaryView) -> None:
     bv.update_analysis()
 
 
-def inline_functions_recursively(bv: BinaryView, start_func: Function) -> None:
+def inline_functions_recursively(bv: BinaryView, start_func: Function, max_depth: int = 0) -> None:
     """
     Recursively inline every function that is reachable from `start_func`
-    so the decompiler can run a true cross‑function analysis on a single,
+    so the decompiler can run a true cross-function analysis on a single,
     fully inlined intermediate language.  The routine sets
     `Function.inline_during_analysis = True` for all descendants in an
     order that forces Binary Ninja to do *exactly one* global analysis
@@ -136,24 +136,27 @@ def inline_functions_recursively(bv: BinaryView, start_func: Function) -> None:
 
     Efficiency highlights
     ---------------------
-    - All descendants are discovered, including self‑ and mutually
+    - All descendants are discovered, including self- and mutually
       recursive functions.
-    - Strongly‑connected components (SCCs) are collapsed, so every
+    - Strongly-connected components (SCCs) are collapsed, so every
       recursion group is handled as a single unit.
     - Analysis is paused while the flags are flipped, eliminating the
       overhead of spawning one job per function.
 
     Algorithm
     ---------
-    1. Pause auto‑analysis
+    1. Pause auto analysis
     2. Build the complete call graph rooted at `start_func`.
-    3. Find strongly‑connected components (SCCs) so that every recursion
+    3. Find strongly-connected components (SCCs) so that every recursion
        group is handled as a single unit.
     4. Collapse SCCs to get the condensation DAG (always acyclic).
     5. Topologically sort the DAG (caller before callee) and iterate it in
-       reverse order to obtain a bottom‑up sequence (callee before caller).
+       reverse order to obtain a bottom-up sequence (callee before caller).
     6. For each SCC in that order, set `inline_during_analysis = True` on all
-       member functions that are not flagged as `thunk`.
+       member functions that are not flagged as `thunk`. If `max_depth > 0`,
+       only do this for SCCs whose **minimum member distance from `start_func`
+       in the original call-graph** is in [1..max_depth]. The root SCC
+       (distance 0) is never inlined here.
     7. Resume analysis and invoke `BinaryView.update_analysis_and_wait()` so
        that the core processes the queued work once.
 
@@ -164,6 +167,13 @@ def inline_functions_recursively(bv: BinaryView, start_func: Function) -> None:
     - Flagging loop             : O(V)
       ------------------------------------
       Total                     : O(V + E)
+
+    Parameter
+    ---------
+    max_depth : int = 0
+        0  : unlimited (original behavior: inline full transitive closure)
+        >0 : only inline SCCs whose **minimum member distance** from `start_func`
+              in the original call-graph lies in [1..N] (root SCC at 0 excluded).
     """
     # Pause automatic analysis so we can batch our changes.
     bv.set_analysis_hold(True)
@@ -181,12 +191,32 @@ def inline_functions_recursively(bv: BinaryView, start_func: Function) -> None:
         # Obtain a topological ordering (caller before callee).
         topo_order = list(nx.topological_sort(condensed_dag))
 
-        # Process components in *reverse* topological order: bottom‑up.
+        # depth map from BFS on the *original* call-graph.
+        # Distance == minimal number of calls from start_func to each function.
+        if max_depth > 0:
+            func_dist = nx.single_source_shortest_path_length(
+                call_graph, start_func)
+
+            # Helper: minimal distance among members of a component (SCC).
+            def comp_min_distance(comp_id: int) -> int | None:
+                members = condensed_dag.nodes[comp_id].get('members', [])
+                md = None
+                for fn in members:
+                    d = func_dist.get(fn)
+                    if d is None:
+                        continue
+                    md = d if md is None else min(md, d)
+                return md
+
+        # 6) Bottom-up: mark only allowed components (depth-filter if set).
         for component in reversed(topo_order):
-            # Retrieve original Binary Ninja functions that belong to this SCC.
+            if max_depth > 0:
+                d = comp_min_distance(component)
+                # Root SCC (d==0) never inline; only levels 1..N
+                if d is None or d == 0 or d > max_depth:
+                    continue
+
             for func in condensed_dag.nodes[component]['members']:
-                # Flag the non-thunk function so Binary Ninja will inline its body at every
-                # call‑site during the next analysis pass.
                 if not func.is_thunk:
                     func.inline_during_analysis = True
     finally:
