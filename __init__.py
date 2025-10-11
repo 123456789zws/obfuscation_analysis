@@ -12,6 +12,7 @@ from binaryninja.settings import Settings
 
 from .obfuscation_analysis import (identify_corrupted_functions_bg,
                                    inline_functions_recursively_bg,
+                                   inline_functions_recursively_max_depth_bg,
                                    remove_corrupted_functions_bg,
                                    simplify_hlil_instruction_bg)
 
@@ -48,11 +49,20 @@ PluginCommand.register(
 )
 
 PluginCommand.register_for_function(
-    "Obfuscation Analysis\\Function Inlining\\Inline Functions Recursively",
+    "Obfuscation Analysis\\Function Inlining\\Inline Recursively (Unlimited)",
     (
         "Inline all functions called by the current function recursively in the decompiler to enable a cross-function analysis."
     ),
     inline_functions_recursively_bg,
+)
+
+
+PluginCommand.register_for_function(
+    "Obfuscation Analysis\\Function Inlining\\Inline Up to N Levels",
+    (
+        "Inline callees only up to a configurable depth, to widen cross-function analysis without flattening the entire call tree."
+    ),
+    inline_functions_recursively_max_depth_bg,
 )
 
 # ----------------------------------------------------------------------
@@ -80,4 +90,23 @@ setting_spec = {
 Settings().register_setting(
     "obfuscation_analysis.mba_oracle_path",
     json.dumps(setting_spec),
+)
+
+
+inline_depth_spec = {
+    "description": (
+        "Maximum call depth for recursive function inlining."
+        "Inlines only up to N call levels from the start function."
+    ),
+    "title": "Max Function Inlining Depth",
+    "default": 1,
+    "type": "number",
+    "optional": False,
+    "requiresRestart": False,
+    "minValue": 1,
+    "maxValue": 128,
+}
+Settings().register_setting(
+    "obfuscation_analysis.function_inlining_max_depth",
+    json.dumps(inline_depth_spec),
 )

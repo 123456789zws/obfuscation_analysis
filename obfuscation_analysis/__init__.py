@@ -5,6 +5,7 @@ from typing import Callable, Generic, TypeVar
 from binaryninja.binaryview import BinaryView
 from binaryninja.highlevelil import HighLevelILInstruction
 from binaryninja.plugin import BackgroundTaskThread
+from binaryninja.settings import Settings
 from binaryninja.function import Function
 
 
@@ -77,6 +78,44 @@ class BGTask1Param(BackgroundTaskThread, Generic[T]):
     def run(self) -> None:
         """Entrypoint executed inside the BN worker thread."""
         self._fn(self._bv, self._param)
+
+
+class BGTask2Param(BackgroundTaskThread, Generic[T]):
+    """
+    Background task that forwards the :class:`BinaryView` and two additional
+    parameters `param1` and `param2` to the worker function.
+
+    Parameters
+    ----------
+    bv :
+        Active BinaryView.
+    param1 :
+        Extra argument forwarded verbatim to *fn*.
+    param2 :
+        Extra argument forwarded verbatim to *fn*.
+    msg :
+        Status text for Binary Ninja’s task pane.
+    fn :
+        Callable expecting two positional arguments `(bv, param1, param2)`.
+    """
+
+    def __init__(
+        self,
+        bv: BinaryView,
+        param1: T,
+        param2: T,
+        msg: str,
+        fn: Callable[[BinaryView, T, T], None],
+    ):
+        super().__init__(msg, True)
+        self._bv: BinaryView = bv
+        self._param1: T = param1
+        self._param2: T = param2
+        self._fn: Callable[[BinaryView, T, T], None] = fn
+
+    def run(self) -> None:
+        """Entrypoint executed inside the BN worker thread."""
+        self._fn(self._bv, self._param1, self._param2)
 
 
 # ---------------------------------------------------------------------------
@@ -163,6 +202,27 @@ def inline_functions_recursively_bg(bv: BinaryView, function: Function) -> None:
     BGTask1Param(
         bv=bv,
         param=function,
+        msg="Inlining functions recursively",
+        fn=inline_functions_recursively,
+    ).start()
+
+
+def inline_functions_recursively_max_depth_bg(bv: BinaryView, function: Function) -> None:
+    """
+    Inlines functions recursivly in the decompiler, enabling a cross-function
+    analysis in a background thread.
+
+    Parameters
+    ----------
+    bv :
+        Active BinaryView to be cleaned up.
+    function:
+        Current Function
+    """
+    BGTask2Param(
+        bv=bv,
+        param1=function,
+        param2=int(Settings().get_string("obfuscation_analysis.function_inlining_max_depth").strip()),
         msg="Inlining functions recursively",
         fn=inline_functions_recursively,
     ).start()
