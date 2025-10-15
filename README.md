@@ -1,4 +1,4 @@
-# Obfuscation Analysis (v1.0)
+# Obfuscation Analysis (v1.2)
 Authors: **Tim Blazytko & Nicolò Altamura**
 
 _Analyze and simplify obfuscated code_
@@ -12,13 +12,14 @@ It bundles a handful of focused helpers that let you
 * simplify Mixed-Boolean Arithmetic (MBA) expressions in one click (based on [msynth](https://github.com/mrphrazer/msynth))
 * locate and scrub functions with broken disassembly
 
-Some example use cases can be found in [examples](./examples). The plugin complements [Obfuscation Detection](https://github.com/mrphrazer/obfuscation_detection/): once suspicious functions are flagged, _Obfuscation Analysis_ helps you clean and understand them. More helpers will be added over time.
+Some example use cases can be found in [examples](./examples). Furthermore, the REcon talk "Breaking Mixed Boolean-Arithmetic Obfuscation in Real-World Applications" demonstrates some use cases. The slides can be found [here](./presentation/recon25_mba_obfuscation.pdf). The plugin complements [Obfuscation Detection](https://github.com/mrphrazer/obfuscation_detection/): once suspicious functions are flagged, _Obfuscation Analysis_ helps you clean and understand them. More helpers will be added over time.
 
 
 ## Core Features
 
 * simplify Mixed-Boolean Arithmetic obfuscation in Binary Ninja's decompiler view
 * identify and remove functions with broken disassembly
+* inline functions in the decompiler view
 * efficient and architecture-agnostic implementation
 * runs as a background task
 * careful error handling: concise user messages, full trace in the Debug log
@@ -97,6 +98,17 @@ Mixed-Boolean Arithmetic (MBA) is an obfuscation technique that buries simple co
 * collapse multi-line MBA tangles into a single, readable equation
 * resolve opaque predicates that rely on MBAs
 * fold convoluted constant encodings down to their literal value
+
+
+### Function Inlining
+
+For the currently selected function, this helper recursively inlines every callee inside the decompiler view, giving Binary Ninja a single, self-contained IL. With all boundaries gone the decompiler can propagate data across functions, enabling deeper constant folding, dead-code elimination, and generally clearer logic. Use it to
+
+* collapse chains of tiny wrappers, thunks, or accessor helpers
+* improve algorithm representations that have been split across multiple functions
+* analyze obfuscation schemes where logic is deliberately scattered between functions
+
+Note that HLIL can become very huge and slow to render on very large functions or deep call trees. In addition, some decompiler optimizations may be less effective once everything is merged into a single unit. To control this, you can limit the inlining depth: set `Settings -> Obfuscation Analysis -> Max Function Inlining Depth` to an upper bound N (per default set to 1). With a depth limit, only the first N call levels are inlined; deeper calls are not inlined.
 
 
 ## Limitations
